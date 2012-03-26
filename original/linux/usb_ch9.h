@@ -167,6 +167,11 @@ struct usb_ctrlrequest {
 #define USB_DT_WIRE_ADAPTER		0x21
 #define USB_DT_RPIPE			0x22
 
+#ifdef OMAP_ENHANCEMENT
+/* From the USB 3.0 spec */
+#define USB_DT_SS_ENDPOINT_COMP 0x30
+#endif
+
 /* conventional codes for class-specific descriptors */
 #define USB_DT_CS_DEVICE		0x21
 #define USB_DT_CS_CONFIG		0x22
@@ -323,6 +328,23 @@ struct usb_endpoint_descriptor {
 #define USB_ENDPOINT_XFER_BULK		2
 #define USB_ENDPOINT_XFER_INT		3
 #define USB_ENDPOINT_MAX_ADJUSTABLE	0x80
+
+
+/*-------------------------------------------------------------------------*/
+
+#ifdef OMAP_ENHANCEMENT
+/* USB_DT_SS_ENDPOINT_COMP: SuperSpeed Endpoint Companion descriptor */
+struct usb_ss_ep_comp_descriptor {
+	__u8  bLength;
+	__u8  bDescriptorType;
+
+	__u8  bMaxBurst;
+	__u8  bmAttributes;
+	__le16 wBytesPerInterval;
+} __attribute__ ((packed));
+
+#define USB_DT_SS_EP_COMP_SIZE          6
+#endif
 
 
 /*-------------------------------------------------------------------------*/
