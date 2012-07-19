@@ -187,8 +187,8 @@ struct ucred {
 #define AF_LLC		26	/* Linux LLC			*/
 #define AF_TIPC		30	/* TIPC sockets			*/
 #define AF_BLUETOOTH	31	/* Bluetooth sockets 		*/
-#define AF_CAIF		38	/* CAIF sockets			*/
-#define AF_MAX		39	/* For now.. */
+#define AF_CAIF		37	/* CAIF sockets			*/
+#define AF_MAX		38	/* For now.. */
 
 /* Protocol families, same as address families. */
 #define PF_UNSPEC	AF_UNSPEC
@@ -283,6 +283,7 @@ struct ucred {
 #define SOL_DCCP	269
 #define SOL_NETLINK	270
 #define SOL_TIPC	271
+#define SOL_CAIF	278
 
 /* IPX options */
 #define IPX_TYPE	1
