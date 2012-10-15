@@ -41,7 +41,7 @@ typedef enum {
 #define ANDROID_ALARM_WAIT                  _IO('a', 1) // ack last alarm and wait for next
 #define ANDROID_ALARM_SET(type)             _IOW('a', 2 | ((type) << 4), struct timespec) // set alarm
 #define ANDROID_ALARM_SET_AND_WAIT(type)    _IOW('a', 3 | ((type) << 4), struct timespec)
-#define ANDROID_ALARM_GET_TIME(type)        _IOW('a', 4 | ((type) << 4), struct timespec)
+#define ANDROID_ALARM_GET_TIME(type)        _IOR('a', 4 | ((type) << 4), struct timespec)
 #define ANDROID_ALARM_SET_RTC               _IOW('a', 5, struct timespec)
 #define ANDROID_ALARM_SET_TIMEZONE          _IOW('a', 6, struct timezone)
 
