@@ -21,6 +21,10 @@
 #ifndef HSI_CHAR_H
 #define HSI_CHAR_H
 
+/* how many char devices would be created at most */
+#define HSI_MAX_CHAR_DEVS       16
+
+/* IOCTL interface */
 #define HSI_CHAR_BASE		'S'
 #define CS_IOW(num, dtype)	_IOW(HSI_CHAR_BASE, num, dtype)
 #define CS_IOR(num, dtype)	_IOR(HSI_CHAR_BASE, num, dtype)
@@ -43,6 +47,15 @@
 #define CS_SET_WAKE_RX_3WIRES_MODE	CS_IOR(14, unsigned int)
 #define CS_SET_HI_SPEED		CS_IOR(15, unsigned int)
 #define CS_GET_SPEED		CS_IOW(16, unsigned long)
+#define CS_SET_CLK_FORCE_ON	CS_IO(17)
+#define CS_SET_CLK_DYNAMIC	CS_IO(18)
+#define CS_GET_TX_STATE_PORT	CS_IOR(19, bool)
+
+#define CS_SET_HSI_LATENCY	CS_IOR(19, unsigned int)
+#define CS_GET_HSI_LATENCY	CS_IOW(20, unsigned int)
+#define CS_SET_MPU_LATENCY	CS_IOR(21, unsigned int)
+#define CS_GET_MPU_LATENCY	CS_IOW(22, unsigned int)
+
 
 #define HSI_MODE_SLEEP		0
 #define HSI_MODE_STREAM		1
@@ -65,7 +78,7 @@
  */
 struct hsi_tx_config {
 	__u32 mode;       /* Stream:1, Frame:2 */
-	__u32 flow;       /* Synchronized:0, Pipelined:1. No Realtime support */
+	__u32 flow;       /* Kept for Legacy: flow is not used for HST */
 	__u32 frame_size; /* HSI: 31,  SSI: <= 31 */
 	__u32 channels;   /* 1, 2, 4, 8, 16 (HSI only) */
 	__u32 divisor;    /* For HSI: <= 0xFF, for SSI: <= 0x7F */
@@ -94,5 +107,10 @@ struct hsi_rx_config {
 			  /* SSI: FT[8..0] */
 };
 
+struct hsi_char_platform_data {
+	unsigned int port;
+	unsigned int num_channels;
+	unsigned int channels_map[HSI_MAX_CHAR_DEVS];
+};
 
 #endif /* HSI_CHAR_H */
