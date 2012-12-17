@@ -222,7 +222,6 @@ struct omapfb_display_info {
 #ifdef __KERNEL__
 
 #include <plat/board.h>
-
 #ifdef CONFIG_ARCH_OMAP1
 #define OMAPFB_PLANE_NUM		1
 #else
@@ -251,19 +250,18 @@ struct omapfb_mem_desc {
 struct omapfb_platform_data {
 	struct omap_lcd_config		lcd;
 	struct omapfb_mem_desc		mem_desc;
-	void				*ctrl_platform_data;
 };
 
-/* in arch/arm/plat-omap/fb.c */
 extern void omapfb_set_platform_data(struct omapfb_platform_data *data);
-extern void omapfb_set_ctrl_platform_data(void *pdata);
-extern void omapfb_reserve_sdram_memblock(void);
 
 /* helper methods that may be used by other modules */
 enum omap_color_mode;
-struct omap_video_timings;
 int omapfb_mode_to_dss_mode(struct fb_var_screeninfo *var,
 			enum omap_color_mode *mode);
+
+void __init omapfb_set_lcd_config(const struct omap_lcd_config *config);
+
+struct omap_video_timings;
 void omapfb_fb2dss_timings(struct fb_videomode *fb_timings,
 			struct omap_video_timings *dss_timings);
 void omapfb_dss2fb_timings(struct omap_video_timings *dss_timings,
