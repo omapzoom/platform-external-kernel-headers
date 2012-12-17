@@ -1,8 +1,9 @@
 /*
- * This file holds USB constants and structures that are needed for USB
- * device APIs.  These are used by the USB device model, which is defined
- * in chapter 9 of the USB 2.0 specification.  Linux has several APIs in C
- * that need these:
+ * This file holds USB constants and structures that are needed for
+ * USB device APIs.  These are used by the USB device model, which is
+ * defined in chapter 9 of the USB 2.0 specification and in the
+ * Wireless USB 1.0 (spread around).  Linux has several APIs in C that
+ * need these:
  *
  * - the master/host side Linux-USB kernel driver API;
  * - the "usbfs" user space API; and
@@ -14,12 +15,26 @@
  *
  * There's also "Wireless USB", using low power short range radios for
  * peripheral interconnection but otherwise building on the USB framework.
+ *
+ * Note all descriptors are declared '__attribute__((packed))' so that:
+ *
+ * [a] they never get padded, either internally (USB spec writers
+ *     probably handled that) or externally;
+ *
+ * [b] so that accessing bigger-than-a-bytes fields will never
+ *     generate bus errors on any platform, even when the location of
+ *     its descriptor inside a bundle isn't "naturally aligned", and
+ *
+ * [c] for consistency, removing all doubt even when it appears to
+ *     someone that the two other points are non-issues for that
+ *     particular descriptor type.
  */
 
 #ifndef __LINUX_USB_CH9_H
 #define __LINUX_USB_CH9_H
 
 #include <linux/types.h>	/* __u8 etc */
+#include <asm/byteorder.h>	/* le16_to_cpu */
 
 /*-------------------------------------------------------------------------*/
 
@@ -52,8 +67,8 @@
 #define USB_RECIP_ENDPOINT		0x02
 #define USB_RECIP_OTHER			0x03
 /* From Wireless USB 1.0 */
-#define USB_RECIP_PORT 			0x04
-#define USB_RECIP_RPIPE 		0x05
+#define USB_RECIP_PORT			0x04
+#define USB_RECIP_RPIPE		0x05
 
 /*
  * Standard requests, for the bRequest field of a SETUP packet.
@@ -73,6 +88,8 @@
 #define USB_REQ_GET_INTERFACE		0x0A
 #define USB_REQ_SET_INTERFACE		0x0B
 #define USB_REQ_SYNCH_FRAME		0x0C
+#define USB_REQ_SET_SEL			0x30
+#define USB_REQ_SET_ISOCH_DELAY		0x31
 
 #define USB_REQ_SET_ENCRYPTION		0x0D	/* Wireless USB */
 #define USB_REQ_GET_ENCRYPTION		0x0E
@@ -88,10 +105,16 @@
 #define USB_REQ_LOOPBACK_DATA_READ	0x16
 #define USB_REQ_SET_INTERFACE_DS	0x17
 
+/* The Link Power Management (LPM) ECN defines USB_REQ_TEST_AND_SET command,
+ * used by hubs to put ports into a new L1 suspend state, except that it
+ * forgot to define its number ...
+ */
+
 /*
  * USB feature flags are written using USB_REQ_{CLEAR,SET}_FEATURE, and
  * are read as a bit array returned by USB_REQ_GET_STATUS.  (So there
- * are at most sixteen features of each type.)
+ * are at most sixteen features of each type.)  Hubs may also support a
+ * new USB_REQ_TEST_AND_SET_FEATURE to put ports into L1 suspend.
  */
 #define USB_DEVICE_SELF_POWERED		0	/* (read only) */
 #define USB_DEVICE_REMOTE_WAKEUP	1	/* dev may initiate wakeup */
@@ -103,8 +126,38 @@
 #define USB_DEVICE_A_ALT_HNP_SUPPORT	5	/* (otg) other RH port does */
 #define USB_DEVICE_DEBUG_MODE		6	/* (special devices only) */
 
+/*
+ * Test Mode Selectors
+ * See USB 2.0 spec Table 9-7
+ */
+#define	TEST_J		1
+#define	TEST_K		2
+#define	TEST_SE0_NAK	3
+#define	TEST_PACKET	4
+#define	TEST_FORCE_EN	5
+
+/*
+ * New Feature Selectors as added by USB 3.0
+ * See USB 3.0 spec Table 9-6
+ */
+#define USB_DEVICE_U1_ENABLE	48	/* dev may initiate U1 transition */
+#define USB_DEVICE_U2_ENABLE	49	/* dev may initiate U2 transition */
+#define USB_DEVICE_LTM_ENABLE	50	/* dev may send LTM */
+#define USB_INTRF_FUNC_SUSPEND	0	/* function suspend */
+
+#define USB_INTR_FUNC_SUSPEND_OPT_MASK	0xFF00
+/*
+ * Suspend Options, Table 9-7 USB 3.0 spec
+ */
+#define USB_INTRF_FUNC_SUSPEND_LP	(1 << (8 + 0))
+#define USB_INTRF_FUNC_SUSPEND_RW	(1 << (8 + 1))
+
 #define USB_ENDPOINT_HALT		0	/* IN/OUT will STALL */
 
+/* Bit array elements as returned by the USB_REQ_GET_STATUS request. */
+#define USB_DEV_STAT_U1_ENABLED		2	/* transition into U1 state */
+#define USB_DEV_STAT_U2_ENABLED		3	/* transition into U2 state */
+#define USB_DEV_STAT_LTM_ENABLED	4	/* Latency tolerance messages */
 
 /**
  * struct usb_ctrlrequest - SETUP data for a USB device control request
@@ -138,8 +191,12 @@ struct usb_ctrlrequest {
  * (rarely) accepted by SET_DESCRIPTOR.
  *
  * Note that all multi-byte values here are encoded in little endian
- * byte order "on the wire".  But when exposed through Linux-USB APIs,
- * they've been converted to cpu byte order.
+ * byte order "on the wire".  Within the kernel and when exposed
+ * through the Linux-USB APIs, they are not converted to cpu byte
+ * order; it is the responsibility of the client code to do this.
+ * The single exception is when device and configuration descriptors (but
+ * not other descriptors) are read from usbfs (i.e. /proc/bus/usb/BBB/DDD);
+ * in this case the fields are converted to host endianness by the kernel.
  */
 
 /*
@@ -166,18 +223,21 @@ struct usb_ctrlrequest {
 #define USB_DT_WIRELESS_ENDPOINT_COMP	0x11
 #define USB_DT_WIRE_ADAPTER		0x21
 #define USB_DT_RPIPE			0x22
-
-#ifdef OMAP_ENHANCEMENT
+#define USB_DT_CS_RADIO_CONTROL		0x23
+/* From the T10 UAS specification */
+#define USB_DT_PIPE_USAGE		0x24
 /* From the USB 3.0 spec */
-#define USB_DT_SS_ENDPOINT_COMP 0x30
-#endif
+#define	USB_DT_SS_ENDPOINT_COMP		0x30
 
-/* conventional codes for class-specific descriptors */
-#define USB_DT_CS_DEVICE		0x21
-#define USB_DT_CS_CONFIG		0x22
-#define USB_DT_CS_STRING		0x23
-#define USB_DT_CS_INTERFACE		0x24
-#define USB_DT_CS_ENDPOINT		0x25
+/* Conventional codes for class-specific descriptors.  The convention is
+ * defined in the USB "Common Class" Spec (3.11).  Individual class specs
+ * are authoritative for their usage, not the "common class" writeup.
+ */
+#define USB_DT_CS_DEVICE		(USB_TYPE_CLASS | USB_DT_DEVICE)
+#define USB_DT_CS_CONFIG		(USB_TYPE_CLASS | USB_DT_CONFIG)
+#define USB_DT_CS_STRING		(USB_TYPE_CLASS | USB_DT_STRING)
+#define USB_DT_CS_INTERFACE		(USB_TYPE_CLASS | USB_DT_INTERFACE)
+#define USB_DT_CS_ENDPOINT		(USB_TYPE_CLASS | USB_DT_ENDPOINT)
 
 /* All standard descriptors have these 2 fields at the beginning */
 struct usb_descriptor_header {
@@ -229,8 +289,11 @@ struct usb_device_descriptor {
 #define USB_CLASS_CONTENT_SEC		0x0d	/* content security */
 #define USB_CLASS_VIDEO			0x0e
 #define USB_CLASS_WIRELESS_CONTROLLER	0xe0
+#define USB_CLASS_MISC			0xef
 #define USB_CLASS_APP_SPEC		0xfe
 #define USB_CLASS_VENDOR_SPEC		0xff
+
+#define USB_SUBCLASS_VENDOR_SPEC	0xff
 
 /*-------------------------------------------------------------------------*/
 
@@ -329,10 +392,210 @@ struct usb_endpoint_descriptor {
 #define USB_ENDPOINT_XFER_INT		3
 #define USB_ENDPOINT_MAX_ADJUSTABLE	0x80
 
+#define USB_ENDPOINT_SYNCTYPE		0x0c
+#define USB_ENDPOINT_SYNC_NONE		(0 << 2)
+#define USB_ENDPOINT_SYNC_ASYNC		(1 << 2)
+#define USB_ENDPOINT_SYNC_ADAPTIVE	(2 << 2)
+#define USB_ENDPOINT_SYNC_SYNC		(3 << 2)
+
+#define USB_ENDPOINT_USAGE_MASK		0x30
+#define USB_ENDPOINT_USAGE_DATA		0x00
+#define USB_ENDPOINT_USAGE_FEEDBACK	0x10
+#define USB_ENDPOINT_USAGE_IMPLICIT_FB	0x20	/* Implicit feedback Data endpoint */
 
 /*-------------------------------------------------------------------------*/
 
-#ifdef OMAP_ENHANCEMENT
+/**
+ * usb_endpoint_num - get the endpoint's number
+ * @epd: endpoint to be checked
+ *
+ * Returns @epd's number: 0 to 15.
+ */
+static inline int usb_endpoint_num(const struct usb_endpoint_descriptor *epd)
+{
+	return epd->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK;
+}
+
+/**
+ * usb_endpoint_type - get the endpoint's transfer type
+ * @epd: endpoint to be checked
+ *
+ * Returns one of USB_ENDPOINT_XFER_{CONTROL, ISOC, BULK, INT} according
+ * to @epd's transfer type.
+ */
+static inline int usb_endpoint_type(const struct usb_endpoint_descriptor *epd)
+{
+	return epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
+}
+
+/**
+ * usb_endpoint_dir_in - check if the endpoint has IN direction
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type IN, otherwise it returns false.
+ */
+static inline int usb_endpoint_dir_in(const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_IN);
+}
+
+/**
+ * usb_endpoint_dir_out - check if the endpoint has OUT direction
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type OUT, otherwise it returns false.
+ */
+static inline int usb_endpoint_dir_out(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_OUT);
+}
+
+/**
+ * usb_endpoint_xfer_bulk - check if the endpoint has bulk transfer type
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type bulk, otherwise it returns false.
+ */
+static inline int usb_endpoint_xfer_bulk(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
+		USB_ENDPOINT_XFER_BULK);
+}
+
+/**
+ * usb_endpoint_xfer_control - check if the endpoint has control transfer type
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type control, otherwise it returns false.
+ */
+static inline int usb_endpoint_xfer_control(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
+		USB_ENDPOINT_XFER_CONTROL);
+}
+
+/**
+ * usb_endpoint_xfer_int - check if the endpoint has interrupt transfer type
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type interrupt, otherwise it returns
+ * false.
+ */
+static inline int usb_endpoint_xfer_int(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
+		USB_ENDPOINT_XFER_INT);
+}
+
+/**
+ * usb_endpoint_xfer_isoc - check if the endpoint has isochronous transfer type
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint is of type isochronous, otherwise it returns
+ * false.
+ */
+static inline int usb_endpoint_xfer_isoc(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return ((epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
+		USB_ENDPOINT_XFER_ISOC);
+}
+
+/**
+ * usb_endpoint_is_bulk_in - check if the endpoint is bulk IN
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has bulk transfer type and IN direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_bulk_in(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_bulk(epd) && usb_endpoint_dir_in(epd);
+}
+
+/**
+ * usb_endpoint_is_bulk_out - check if the endpoint is bulk OUT
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has bulk transfer type and OUT direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_bulk_out(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_bulk(epd) && usb_endpoint_dir_out(epd);
+}
+
+/**
+ * usb_endpoint_is_int_in - check if the endpoint is interrupt IN
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has interrupt transfer type and IN direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_int_in(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_int(epd) && usb_endpoint_dir_in(epd);
+}
+
+/**
+ * usb_endpoint_is_int_out - check if the endpoint is interrupt OUT
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has interrupt transfer type and OUT direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_int_out(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_int(epd) && usb_endpoint_dir_out(epd);
+}
+
+/**
+ * usb_endpoint_is_isoc_in - check if the endpoint is isochronous IN
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has isochronous transfer type and IN direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_isoc_in(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_isoc(epd) && usb_endpoint_dir_in(epd);
+}
+
+/**
+ * usb_endpoint_is_isoc_out - check if the endpoint is isochronous OUT
+ * @epd: endpoint to be checked
+ *
+ * Returns true if the endpoint has isochronous transfer type and OUT direction,
+ * otherwise it returns false.
+ */
+static inline int usb_endpoint_is_isoc_out(
+				const struct usb_endpoint_descriptor *epd)
+{
+	return usb_endpoint_xfer_isoc(epd) && usb_endpoint_dir_out(epd);
+}
+
+/**
+ * usb_endpoint_maxp - get endpoint's max packet size
+ * @epd: endpoint to be checked
+ *
+ * Returns @epd's max packet
+ */
+static inline int usb_endpoint_maxp(const struct usb_endpoint_descriptor *epd)
+{
+	return __le16_to_cpu(epd->wMaxPacketSize);
+}
+
+/*-------------------------------------------------------------------------*/
+
 /* USB_DT_SS_ENDPOINT_COMP: SuperSpeed Endpoint Companion descriptor */
 struct usb_ss_ep_comp_descriptor {
 	__u8  bLength;
@@ -343,9 +606,29 @@ struct usb_ss_ep_comp_descriptor {
 	__le16 wBytesPerInterval;
 } __attribute__ ((packed));
 
-#define USB_DT_SS_EP_COMP_SIZE          6
-#endif
+#define USB_DT_SS_EP_COMP_SIZE		6
 
+/* Bits 4:0 of bmAttributes if this is a bulk endpoint */
+static inline int
+usb_ss_max_streams(const struct usb_ss_ep_comp_descriptor *comp)
+{
+	int		max_streams;
+
+	if (!comp)
+		return 0;
+
+	max_streams = comp->bmAttributes & 0x1f;
+
+	if (!max_streams)
+		return 0;
+
+	max_streams = 1 << max_streams;
+
+	return max_streams;
+}
+
+/* Bits 1:0 of bmAttributes if this is an isoc endpoint */
+#define USB_SS_MULT(p)			(1 + ((p) & 0x3))
 
 /*-------------------------------------------------------------------------*/
 
@@ -388,7 +671,7 @@ struct usb_debug_descriptor {
 	/* bulk endpoints with 8 byte maxpacket */
 	__u8  bDebugInEndpoint;
 	__u8  bDebugOutEndpoint;
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -417,7 +700,7 @@ struct usb_security_descriptor {
 
 	__le16 wTotalLength;
 	__u8  bNumEncryptionTypes;
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -431,7 +714,7 @@ struct usb_key_descriptor {
 	__u8  tTKID[3];
 	__u8  bReserved;
 	__u8  bKeyData[0];
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -447,20 +730,21 @@ struct usb_encryption_descriptor {
 #define	USB_ENC_TYPE_RSA_1		3	/* rsa3072/sha1 auth */
 	__u8  bEncryptionValue;		/* use in SET_ENCRYPTION */
 	__u8  bAuthKeyIndex;
-};
+} __attribute__((packed));
 
 
 /*-------------------------------------------------------------------------*/
 
-/* USB_DT_BOS:  group of wireless capabilities */
+/* USB_DT_BOS:  group of device-level capabilities */
 struct usb_bos_descriptor {
 	__u8  bLength;
 	__u8  bDescriptorType;
 
 	__le16 wTotalLength;
 	__u8  bNumDeviceCaps;
-};
+} __attribute__((packed));
 
+#define USB_DT_BOS_SIZE		5
 /*-------------------------------------------------------------------------*/
 
 /* USB_DT_DEVICE_CAPABILITY:  grouped with BOS */
@@ -468,7 +752,7 @@ struct usb_dev_cap_header {
 	__u8  bLength;
 	__u8  bDescriptorType;
 	__u8  bDevCapabilityType;
-};
+} __attribute__((packed));
 
 #define	USB_CAP_TYPE_WIRELESS_USB	1
 
@@ -496,8 +780,63 @@ struct usb_wireless_cap_descriptor {	/* Ultra Wide Band */
 	__u8  bmFFITXPowerInfo;	/* FFI power levels */
 	__le16 bmBandGroup;
 	__u8  bReserved;
-};
+} __attribute__((packed));
 
+/* USB 2.0 Extension descriptor */
+#define	USB_CAP_TYPE_EXT		2
+
+struct usb_ext_cap_descriptor {		/* Link Power Management */
+	__u8  bLength;
+	__u8  bDescriptorType;
+	__u8  bDevCapabilityType;
+	__le32 bmAttributes;
+#define USB_LPM_SUPPORT			(1 << 1)	/* supports LPM */
+#define USB_BESL_SUPPORT		(1 << 2)	/* supports BESL */
+#define USB_BESL_BASELINE_VALID		(1 << 3)	/* Baseline BESL valid*/
+#define USB_BESL_DEEP_VALID		(1 << 4)	/* Deep BESL valid */
+#define USB_GET_BESL_BASELINE(p)	(((p) & (0xf << 8)) >> 8)
+#define USB_GET_BESL_DEEP(p)		(((p) & (0xf << 12)) >> 12)
+} __attribute__((packed));
+
+#define USB_DT_USB_EXT_CAP_SIZE	7
+
+/*
+ * SuperSpeed USB Capability descriptor: Defines the set of SuperSpeed USB
+ * specific device level capabilities
+ */
+#define		USB_SS_CAP_TYPE		3
+struct usb_ss_cap_descriptor {		/* Link Power Management */
+	__u8  bLength;
+	__u8  bDescriptorType;
+	__u8  bDevCapabilityType;
+	__u8  bmAttributes;
+#define USB_LTM_SUPPORT			(1 << 1) /* supports LTM */
+	__le16 wSpeedSupported;
+#define USB_LOW_SPEED_OPERATION		(1)	 /* Low speed operation */
+#define USB_FULL_SPEED_OPERATION	(1 << 1) /* Full speed operation */
+#define USB_HIGH_SPEED_OPERATION	(1 << 2) /* High speed operation */
+#define USB_5GBPS_OPERATION		(1 << 3) /* Operation at 5Gbps */
+	__u8  bFunctionalitySupport;
+	__u8  bU1devExitLat;
+	__le16 bU2DevExitLat;
+} __attribute__((packed));
+
+#define USB_DT_USB_SS_CAP_SIZE	10
+
+/*
+ * Container ID Capability descriptor: Defines the instance unique ID used to
+ * identify the instance across all operating modes
+ */
+#define	CONTAINER_ID_TYPE	4
+struct usb_ss_container_id_descriptor {
+	__u8  bLength;
+	__u8  bDescriptorType;
+	__u8  bDevCapabilityType;
+	__u8  bReserved;
+	__u8  ContainerID[16]; /* 128-bit number */
+} __attribute__((packed));
+
+#define USB_DT_USB_SS_CONTN_ID_SIZE	20
 /*-------------------------------------------------------------------------*/
 
 /* USB_DT_WIRELESS_ENDPOINT_COMP:  companion descriptor associated with
@@ -517,7 +856,7 @@ struct usb_wireless_ep_comp_descriptor {
 #define USB_ENDPOINT_SWITCH_NO		0
 #define USB_ENDPOINT_SWITCH_SWITCH	1
 #define USB_ENDPOINT_SWITCH_SCALE	2
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -533,7 +872,7 @@ struct usb_handshake {
 	__u8 CDID[16];
 	__u8 nonce[16];
 	__u8 MIC[8];
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -545,7 +884,7 @@ struct usb_connection_context {
 	__u8 CHID[16];		/* persistent host id */
 	__u8 CDID[16];		/* device id (unique w/in host context) */
 	__u8 CK[16];		/* connection key */
-};
+} __attribute__((packed));
 
 /*-------------------------------------------------------------------------*/
 
@@ -555,8 +894,21 @@ enum usb_device_speed {
 	USB_SPEED_UNKNOWN = 0,			/* enumerating */
 	USB_SPEED_LOW, USB_SPEED_FULL,		/* usb 1.1 */
 	USB_SPEED_HIGH,				/* usb 2.0 */
-	USB_SPEED_VARIABLE,			/* wireless (usb 2.5) */
+	USB_SPEED_WIRELESS,			/* wireless (usb 2.5) */
+	USB_SPEED_SUPER,			/* usb 3.0 */
 };
+
+#ifdef __KERNEL__
+
+/**
+ * usb_speed_string() - Returns human readable-name of the speed.
+ * @speed: The speed to return human-readable name for.  If it's not
+ *   any of the speeds defined in usb_device_speed enum, string for
+ *   USB_SPEED_UNKNOWN will be returned.
+ */
+extern const char *usb_speed_string(enum usb_device_speed speed);
+
+#endif
 
 enum usb_device_state {
 	/* NOTATTACHED isn't in the USB spec, and this state acts
@@ -567,8 +919,8 @@ enum usb_device_state {
 	/* chapter 9 and authentication (wireless) device states */
 	USB_STATE_ATTACHED,
 	USB_STATE_POWERED,			/* wired */
-	USB_STATE_UNAUTHENTICATED,		/* auth */
 	USB_STATE_RECONNECTING,			/* auth */
+	USB_STATE_UNAUTHENTICATED,		/* auth */
 	USB_STATE_DEFAULT,			/* limited function */
 	USB_STATE_ADDRESS,
 	USB_STATE_CONFIGURED,			/* most functions */
@@ -578,7 +930,19 @@ enum usb_device_state {
 	/* NOTE:  there are actually four different SUSPENDED
 	 * states, returning to POWERED, DEFAULT, ADDRESS, or
 	 * CONFIGURED respectively when SOF tokens flow again.
+	 * At this level there's no difference between L1 and L2
+	 * suspend states.  (L2 being original USB 1.1 suspend.)
 	 */
 };
 
-#endif	/* __LINUX_USB_CH9_H */
+/*-------------------------------------------------------------------------*/
+
+/*
+ * As per USB compliance update, a device that is actively drawing
+ * more than 100mA from USB must report itself as bus-powered in
+ * the GetStatus(DEVICE) call.
+ * http://compliance.usb.org/index.asp?UpdateFile=Electrical&Format=Standard#34
+ */
+#define USB_SELF_POWER_VBUS_MAX_DRAW		100
+
+#endif /* __LINUX_USB_CH9_H */
