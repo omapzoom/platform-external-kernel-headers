@@ -1,3 +1,24 @@
+/*
+ * include/video/dsscomp.h
+ *
+ * DSS Composition header file
+ *
+ * Copyright (C) 2011 Texas Instruments, Inc
+ * Author: Lajos Molnar <molnar@ti.com>
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef _LINUX_DSSCOMP_H
 #define _LINUX_DSSCOMP_H
 
@@ -64,12 +85,12 @@ enum omap_writeback_source {
 	OMAP_WB_GFX		= 3,
 	OMAP_WB_VID1		= 4,
 	OMAP_WB_VID2		= 5,
-	OMAP_WB_VID3		= 6
+	OMAP_WB_VID3		= 6,
 };
 
 enum omap_writeback_mode {
-	OMAP_WB_CAPTURE_MODE	= 0x0,
-	OMAP_WB_MEM2MEM_MODE	= 0x1,
+	OMAP_WB_CAPTURE_MODE	= 0,
+	OMAP_WB_MEM2MEM_MODE	= 1,
 };
 
 enum omap_dss_trans_key_type {
@@ -113,32 +134,12 @@ struct omap_dss_cconv_coefs {
 
 	/* Y is 16..235, UV is 16..240 if not fullrange.  Otherwise 0..255 */
 	__u16 full_range;
-} __attribute__ ((aligned(4)));
+} __aligned(4);
 
 struct omap_dss_cpr_coefs {
 	__s16 rr, rg, rb;
 	__s16 gr, gg, gb;
 	__s16 br, bg, bb;
-};
-
-#endif
-
-/* copy of fb_videomode */
-struct dsscomp_videomode {
-	const char *name;	/* optional */
-	__u32 refresh;		/* optional */
-	__u32 xres;
-	__u32 yres;
-	__u32 pixclock;
-	__u32 left_margin;
-	__u32 right_margin;
-	__u32 upper_margin;
-	__u32 lower_margin;
-	__u32 hsync_len;
-	__u32 vsync_len;
-	__u32 sync;
-	__u32 vmode;
-	__u32 flag;
 };
 
 /*
@@ -199,6 +200,26 @@ struct s3d_disp_info {
 	unsigned int gap;
 };
 
+#endif
+
+/* copy of fb_videomode */
+struct dsscomp_videomode {
+	const char *name;	/* optional */
+	__u32 refresh;		/* optional */
+	__u32 xres;
+	__u32 yres;
+	__u32 pixclock;
+	__u32 left_margin;
+	__u32 right_margin;
+	__u32 upper_margin;
+	__u32 lower_margin;
+	__u32 hsync_len;
+	__u32 vsync_len;
+	__u32 sync;
+	__u32 vmode;
+	__u32 flag;
+};
+
 enum omap_dss_ilace_mode {
 	OMAP_DSS_ILACE		= (1 << 0),	/* interlaced vs. progressive */
 	OMAP_DSS_ILACE_SEQ	= (1 << 1),	/* sequential vs interleaved */
@@ -217,7 +238,7 @@ struct dss2_vc1_range_map_info {
 
 	__u8 range_y;	/* 0..7 */
 	__u8 range_uv;	/* 0..7 */
-} __attribute__ ((aligned(4)));
+} __aligned(4);
 
 /* standard rectangle */
 struct dss2_rect_t {
@@ -225,7 +246,7 @@ struct dss2_rect_t {
 	__s32 y;	/* top */
 	__u32 w;	/* width */
 	__u32 h;	/* height */
-} __attribute__ ((aligned(4)));
+} __aligned(4);
 
 /* decimation constraints */
 struct dss2_decim {
@@ -233,7 +254,7 @@ struct dss2_decim {
 	__u8 max_x;	/* 0 is same as 255 */
 	__u8 min_y;
 	__u8 max_y;	/* 0 is same as 255 */
-} __attribute__ ((aligned(4)));
+} __aligned(4);
 
 /*
  * A somewhat more user friendly interface to the DSS2.  This is a
@@ -357,7 +378,10 @@ struct dss2_ovl_cfg {
 	__u8 enabled;	/* bool */
 	__u8 zonly;	/* only set zorder and enabled bit */
 	__u8 mgr_ix;	/* mgr index */
-} __attribute__ ((aligned(4)));
+
+	__u8 force_1d; /* force 1d access through tiled buffer */
+	__u8 mflag_en; /* mflag for the overlay */
+} __aligned(4);
 
 enum omapdss_buffer_type {
 	OMAP_DSS_BUFTYPE_SDMA,
@@ -445,7 +469,7 @@ struct dss2_mgr_info {
 	__u8 alpha_blending;	/* bool - overrides trans_enabled */
 	__u8 cpr_enabled;	/* bool */
 	__u8 swap_rb;		/* bool - swap red and blue */
-} __attribute__ ((aligned(4)));
+} __aligned(4);
 
 /*
  * ioctl: DSSCIOC_SETUP_MGR, struct dsscomp_setup_mgr_data
@@ -704,6 +728,7 @@ struct dsscomp_platform_info {
 #define DSSCIOC_WAIT		_IOW('O', 132, struct dsscomp_wait_data)
 
 #define DSSCIOC_SETUP_DISPC	_IOW('O', 133, struct dsscomp_setup_dispc_data)
-#define DSSCIOC_SETUP_DISPLAY	_IOW('O', 134, struct dsscomp_setup_display_data)
+#define DSSCIOC_SETUP_DISPLAY	\
+			_IOW('O', 134, struct dsscomp_setup_display_data)
 #define DSSCIOC_QUERY_PLATFORM	_IOR('O', 135, struct dsscomp_platform_info)
 #endif
