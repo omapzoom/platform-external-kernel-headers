@@ -43,6 +43,12 @@ struct omap_ion_tiler_alloc_data {
 	__u32 token;
 };
 
+struct omap_ion_lookup_share_fd {
+	int alloc_fd;
+	int num_fds;
+	int *share_fds;
+};
+
 #ifdef __KERNEL__
 int omap_ion_tiler_alloc(struct ion_client *client,
 			 struct omap_ion_tiler_alloc_data *data);
@@ -73,6 +79,7 @@ enum {
 
 enum {
 	OMAP_ION_TILER_ALLOC,
+	OMAP_ION_LOOKUP_SHARE_FD,
 };
 
 /**
